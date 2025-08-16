@@ -1,0 +1,597 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flashcard Interaktif 汉语4 第十一课 — TTS 优化</title>
+<style>
+/* ====== Design System ====== */
+:root {
+  --bg: #0b0c0f;
+  --surface: #13151a;
+  --card: #1a1d23;
+  --card-2: #0f172a;
+  --text: #e6e8ee;
+  --muted: #a9b0bf;
+  --primary: #3b82f6;
+  --primary-2: #2563eb;
+  --border: #2b2f36;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --space: clamp(16px, 2vw, 24px);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:#f8fafc; --surface:#ffffff; --card:#ffffff; --card-2:#f1f5f9;
+    --text:#0b1220; --muted:#5b6472; --primary:#2563eb; --primary-2:#1d4ed8;
+    --border:#e5e7eb; --shadow:0 10px 30px rgba(2,6,23,.08);
+  }
+}
+
+/* ====== Base ====== */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background: radial-gradient(1200px 600px at 70% -10%, rgba(59,130,246,.15), transparent 60%), var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: calc(var(--space) + 8px) var(--space) var(--space);
+}
+
+/* ====== Header ====== */
+.header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+.title {
+  margin: 0;
+  font-size: clamp(20px, 3vw, 28px);
+  letter-spacing: .3px;
+}
+.subtitle {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.badge {
+  background: linear-gradient(180deg, var(--card-2), var(--card));
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ====== Layout ====== */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space);
+}
+@media (max-width: 860px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* ====== Card Area ====== */
+.stage {
+  background: linear-gradient(180deg, var(--card), var(--card-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+button {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface), var(--card));
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform .05s ease, border-color .2s ease, background .2s ease;
+}
+button:hover { border-color: var(--primary); }
+button:active { transform: translateY(1px); }
+.btn-primary {
+  background: linear-gradient(180deg, var(--primary), var(--primary-2));
+  border-color: transparent;
+  color: white;
+}
+.icon { margin-right: 6px; opacity: .9; }
+
+.flashcard-wrap {
+  perspective: 1200px;
+  height: clamp(240px, 36vh, 340px);
+  display:flex; align-items:center; justify-content:center;
+  margin: 8px 0 14px;
+}
+.flashcard {
+  width: min(640px, 96%);
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 520ms cubic-bezier(.2,.8,.25,1);
+  cursor: pointer;
+  user-select: none;
+}
+.flashcard.is-flipped { transform: rotateY(180deg); }
+.face {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--surface), var(--card));
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 22px;
+  backface-visibility: hidden;
+  text-align: center;
+}
+.face.back {
+  transform: rotateY(180deg);
+  background: linear-gradient(180deg, #052e1a, #0b3b23);
+  color: #eafff2;
+  border-color: rgba(34,197,94,.35);
+}
+.word {
+  font-size: clamp(28px, 5.6vw, 44px);
+  line-height: 1.2;
+  letter-spacing: .6px;
+}
+.hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.progressbar {
+  height: 10px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progressbar > div {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--primary), var(--ok));
+  transition: width .35s ease;
+}
+
+/* ====== TTS Panel ====== */
+.tts {
+  background: linear-gradient(180deg, var(--surface), var(--card));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.tts h3 { margin: 0 0 10px; font-size: 16px; }
+.tts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 860px) {
+  .tts-grid { grid-template-columns: 1fr; }
+}
+label { font-size: 12px; color: var(--muted); display:block; margin-bottom: 6px;}
+select, input[type="range"] {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.kbd { padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--muted); background: var(--card-2); }
+.note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* toast */
+.toast {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%) translateY(20px);
+  background: var(--surface); border:1px solid var(--border); color: var(--text);
+  padding: 10px 14px; border-radius: 12px; box-shadow: var(--shadow);
+  opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease;
+  font-size: 14px;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1 class="title">Flashcard Interaktif — 汉语 今天的天气很好（Bab 2）</h1>
+      <p class="subtitle">Shortcut: <span class="kbd">←</span> / <span class="kbd">→</span> ganti kartu, <span class="kbd">Space</span> flip</p>
+    </div>
+    <div class="badge" id="progressLabel">Kartu 1 dari 12</div>
+  </div>
+
+  <div class="grid">
+    <!-- Stage -->
+    <section class="stage">
+      <div class="toolbar">
+        <div class="btn-group">
+          <button id="btnPrev"><span class="icon">⟵</span>Prev</button>
+          <button id="btnNext">Next<span class="icon">⟶</span></button>
+          <button id="btnFlip">Flip ⤾</button>
+          <button id="btnShuffle">🔀 Shuffle</button>
+        </div>
+        <div class="btn-group">
+          <button class="btn-primary" id="btnSpeakFront">🔊 Baca Depan (ZH)</button>
+          <button class="" id="btnSpeakBack">🔊 Baca Belakang (ID→ZH)</button>
+          <button id="btnStop">⏹ Stop</button>
+        </div>
+      </div>
+
+      <div class="flashcard-wrap" id="cardWrap" title="Klik untuk membalik">
+        <div class="flashcard" id="flashcard" role="button" aria-label="Kartu kosakata">
+          <div class="face front">
+            <div>
+              <div class="word" id="front">Loading...</div>
+              <div class="hint">Klik / tekan <span class="kbd">Space</span> untuk membalik</div>
+            </div>
+          </div>
+          <div class="face back">
+            <div>
+              <div class="word" id="back">Loading...</div>
+              <div class="hint">Contoh kalimat / arti</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="progressbar" aria-hidden="true"><div id="pbar"></div></div>
+    </section>
+
+    <!-- TTS Panel -->
+    <aside class="tts">
+      <h3>Text-to-Speech</h3>
+      <div class="tts-grid">
+        <div>
+          <label for="voiceZh"><b>Suara Hanzi</b> (prioritas zh-CN)</label>
+          <select id="voiceZh"></select>
+        </div>
+        <div>
+          <label for="voiceId"><b>Suara Arti</b> (ID/EN)</label>
+          <select id="voiceId"></select>
+        </div>
+        <div>
+          <label for="rate">Kecepatan</label>
+          <input id="rate" type="range" min="0.5" max="1.5" value="1" step="0.1">
+        </div>
+        <div class="row" style="align-items:center; margin-top: 18px;">
+          <label style="margin:0; display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="autoSpeak"> Auto baca saat ganti kartu
+          </label>
+        </div>
+      </div>
+      <div class="note">Jika suara belum muncul, tunggu 1–2 detik atau klik tombol “Baca Depan”.</div>
+    </aside>
+  </div>
+</div>
+
+<!-- toast -->
+<div class="toast" id="toast"></div>
+
+<!-- SFX -->
+<audio id="flipSound" src="https://www.soundjay.com/buttons/sounds/button-29.mp3" preload="auto"></audio>
+
+<script>
+/* =================== Data =================== */
+const cards = [
+  {
+    "front": "今天 (jīntiān)",
+    "back": "Hari ini - 今天的天气很好。"
+  },
+  {
+    "front": "天气 (tiānqì)",
+    "back": "Cuaca - 今天的天气很好。"
+  },
+  {
+    "front": "很 (hěn)",
+    "back": "Sangat - 花很漂亮。"
+  },
+  {
+    "front": "花 (huā)",
+    "back": "Bunga - 花很漂亮。"
+  },
+  {
+    "front": "漂亮 (piàoliang)",
+    "back": "Cantik - 花很漂亮。"
+  },
+  {
+    "front": "风 (fēng)",
+    "back": "Angin - 风很小。"
+  },
+  {
+    "front": "高兴 (gāoxìng)",
+    "back": "Senang - 我们很高兴。"
+  },
+  {
+    "front": "脚 (jiǎo)",
+    "back": "Kaki - 爸爸的脚很大。"
+  },
+  {
+    "front": "新 (xīn)",
+    "back": "Baru - 我的字典很新。"
+  },
+  {
+    "front": "旧 (jiù)",
+    "back": "Lama - 他的字典很旧。"
+  },
+  {
+    "front": "蓝 (lán)",
+    "back": "Biru - 天很蓝。"
+  },
+  {
+    "front": "云 (yún)",
+    "back": "Awan - 云很白。"
+  },
+  {
+    "front": "白 (bái)",
+    "back": "Putih - 云很白。"
+  }
+];
+
+/* =================== State & Elements =================== */
+let current = 0;
+const flashcard = document.getElementById('flashcard');
+const pbar = document.getElementById('pbar');
+const progressLabel = document.getElementById('progressLabel');
+const toast = document.getElementById('toast');
+
+/* =================== Helpers =================== */
+function showToast(msg, ms = 1800) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), ms);
+}
+
+function updateCard() {
+  document.getElementById('front').textContent = cards[current].front;
+  document.getElementById('back').textContent = cards[current].back;
+  flashcard.classList.remove('is-flipped');
+  updateProgress();
+  if (document.getElementById('autoSpeak').checked) speakFront();
+}
+
+function updateProgress() {
+  const pct = ((current + 1) / cards.length) * 100;
+  pbar.style.width = pct + '%';
+  progressLabel.textContent = `Kartu ${current + 1} dari ${cards.length}`;
+}
+
+function flipCard() {
+  const sound = document.getElementById('flipSound');
+  try { sound.currentTime = 0; sound.play(); } catch(e){}
+  flashcard.classList.toggle('is-flipped');
+}
+function nextCard() { current = (current + 1) % cards.length; updateCard(); }
+function prevCard() { current = (current - 1 + cards.length) % cards.length; updateCard(); }
+function shuffleCards() {
+  for (let i = cards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cards[i], cards[j]] = [cards[j], cards[i]];
+  }
+  current = 0; updateCard(); showToast('Diacak!');
+}
+
+/* keyboard */
+window.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.code === 'ArrowRight') { e.preventDefault(); nextCard(); }
+  else if (e.code === 'ArrowLeft') { e.preventDefault(); prevCard(); }
+  else if (e.code === 'Space') { e.preventDefault(); flipCard(); }
+});
+
+/* click bindings */
+document.getElementById('btnPrev').onclick = prevCard;
+document.getElementById('btnNext').onclick = nextCard;
+document.getElementById('btnFlip').onclick = flipCard;
+document.getElementById('btnShuffle').onclick = shuffleCards;
+document.getElementById('btnSpeakFront').onclick = speakFront;
+document.getElementById('btnSpeakBack').onclick = speakBack;
+document.getElementById('btnStop').onclick = stopTTS;
+document.getElementById('cardWrap').onclick = flipCard;
+
+/* =================== TTS =================== */
+let voices = [];
+let currentUtterance = null;
+
+function loadVoices() {
+  voices = window.speechSynthesis.getVoices();
+  populateVoiceSelects();
+}
+
+function populateVoiceSelects() {
+  const voiceZhSel = document.getElementById('voiceZh');
+  const voiceIdSel = document.getElementById('voiceId');
+
+  const makeOption = (v) => {
+    const o = document.createElement('option');
+    o.value = v.name;
+    o.textContent = `${v.name} (${v.lang})${v.default ? ' — default' : ''}`;
+    return o;
+  };
+
+  voiceZhSel.innerHTML = '';
+  voiceIdSel.innerHTML = '';
+
+  // sort by lang then name for readability
+  const sorted = voices.slice().sort((a,b)=> (a.lang||'').localeCompare(b.lang||'') || (a.name||'').localeCompare(b.name||''));
+  for (const v of sorted) {
+    voiceZhSel.appendChild(makeOption(v));
+    voiceIdSel.appendChild(makeOption(v));
+  }
+
+  // priority zh for Hanzi; ID/EN for arti
+  selectPreferred(voiceZhSel, ['zh-CN','zh','cmn-Hans-CN','zh-TW','cmn-Hant-TW']);
+  selectPreferred(voiceIdSel, ['id-ID','ms-MY','en-US','en-GB']);
+}
+
+function selectPreferred(selectEl, prefs) {
+  const options = Array.from(selectEl.options);
+  for (const pref of prefs) {
+    const found = options.find(o => o.textContent.includes(`(${pref})`));
+    if (found) { selectEl.value = found.value; return; }
+  }
+  if (options[0]) selectEl.value = options[0].value;
+}
+
+function getVoiceByName(name) { return voices.find(v => v.name === name) || null; }
+
+function cancelSpeak() {
+  if (currentUtterance) {
+    try { window.speechSynthesis.cancel(); } catch(e){}
+    currentUtterance = null;
+  }
+}
+
+function speak(text, voiceName, rate=1) {
+  cancelSpeak();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = getVoiceByName(voiceName);
+  if (v) u.voice = v;
+  u.rate = Math.max(0.5, Math.min(1.5, rate));
+  currentUtterance = u;
+  window.speechSynthesis.speak(u);
+}
+
+function extractHanzi(str) {
+  const matched = str.match(/[\u4E00-\u9FFF]+/g);
+  return matched ? matched.join('') : '';
+}
+function extractLatinBeforeDash(str) {
+  const beforeDash = str.split(' - ')[0];
+  return beforeDash.trim();
+}
+function extractHanziFromBack(str) {
+  const matched = str.match(/[\u4E00-\u9FFF，。！？、“”‘’]+/g);
+  return matched ? matched.join('') : '';
+}
+
+function speakFront() {
+  const hanzi = extractHanzi(cards[current].front);
+  if (!hanzi) { showToast('Tidak ada teks Hanzi'); return; }
+  const voiceName = document.getElementById('voiceZh').value;
+  const rate = parseFloat(document.getElementById('rate').value);
+  speak(hanzi, voiceName, rate);
+}
+
+function speakBack() {
+  const arti = extractLatinBeforeDash(cards[current].back);
+  const hanziKalimat = extractHanziFromBack(cards[current].back);
+  const rate = parseFloat(document.getElementById('rate').value);
+  const voiceIdName = document.getElementById('voiceId').value;
+  const voiceZhName = document.getElementById('voiceZh').value;
+
+  cancelSpeak();
+  const u1 = new SpeechSynthesisUtterance(arti);
+  const v1 = getVoiceByName(voiceIdName);
+  if (v1) u1.voice = v1;
+  u1.rate = Math.max(0.5, Math.min(1.5, rate));
+
+  if (hanziKalimat) {
+    const u2 = new SpeechSynthesisUtterance(hanziKalimat);
+    const v2 = getVoiceByName(voiceZhName);
+    if (v2) u2.voice = v2;
+    u2.rate = u1.rate;
+    u1.onend = () => { window.speechSynthesis.speak(u2); currentUtterance = u2; };
+  }
+
+  currentUtterance = u1;
+  window.speechSynthesis.speak(u1);
+}
+
+function stopTTS() { cancelSpeak(); showToast('TTS dihentikan'); }
+
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+  setTimeout(loadVoices, 120);
+} else {
+  showToast('Browser tidak mendukung Web Speech API');
+}
+
+/* init */
+updateCard();
+</script>
+
+<script>
+let synth = window.speechSynthesis;
+let ttsVoices = [];
+
+async function getVoices() {
+  return new Promise(resolve => {
+    let voices = synth.getVoices();
+    if (voices.length) {
+      resolve(voices);
+      return;
+    }
+    synth.onvoiceschanged = () => {
+      voices = synth.getVoices();
+      resolve(voices);
+    };
+  });
+}
+
+async function speak(textToSpeak) {
+  if (!textToSpeak || !synth) return;
+
+  if (synth.speaking) {
+    synth.cancel(); // hentikan suara yang sedang berjalan
+  }
+
+  if (ttsVoices.length === 0) {
+    ttsVoices = await getVoices();
+  }
+
+  const utterThis = new SpeechSynthesisUtterance(textToSpeak);
+
+  // --- Prioritas zh-CN ---
+  let bestVoice = ttsVoices.find(voice => voice.lang === 'zh-CN');
+  if (!bestVoice) {
+    bestVoice = ttsVoices.find(voice => voice.lang.startsWith('zh'));
+  }
+
+  if (bestVoice) {
+    utterThis.voice = bestVoice;
+    const warn = document.getElementById('tts-warning');
+    if (warn) warn.style.display = 'none';
+  } else {
+    utterThis.lang = 'zh-CN'; // fallback
+    const warn = document.getElementById('tts-warning');
+    if (warn) warn.style.display = 'block';
+  }
+
+  utterThis.pitch = 1;
+  utterThis.rate = 0.9;
+  synth.speak(utterThis);
+}
+</script>
+
+</body>
+</html>
